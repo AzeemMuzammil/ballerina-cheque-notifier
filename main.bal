@@ -2,6 +2,7 @@ import ballerina/time;
 import ballerinax/googleapis.sheets;
 import ballerinax/twilio;
 import ballerina/lang.regexp;
+import ballerina/log;
 
 configurable string clientId = ?;
 configurable string clientSecret = ?;
@@ -31,8 +32,12 @@ twilio:Client twilioClient = check new (twilioConfig);
 
 public function main() returns error? {
     string[] sheetNames = ["Cheques Received", "Cheques Issued"];
-    time:Civil today = check time:civilFromString(time:utcToString(time:utcNow()));
-    time:Utc threeDaysUtc = time:utcAddSeconds(time:utcNow(), 259200);
+
+    time:Utc utcNow = time:utcNow();
+    time:Utc utcTimeZoneAdjusted = time:utcAddSeconds(utcNow, 19800);
+    time:Civil utcTimeZoneAdjustedToday = check time:civilFromString(time:utcToString(utcTimeZoneAdjusted));
+
+    time:Utc threeDaysUtc = time:utcAddSeconds(utcTimeZoneAdjusted, 259200);
     time:Civil threeDaysLater = check time:civilFromString(time:utcToString(threeDaysUtc));
     boolean noCheques = true;
 
@@ -63,7 +68,7 @@ public function main() returns error? {
                 chequeDate: row[4].toString()
             };
 
-            if datesEqual(today, chequeDate) {
+            if datesEqual(utcTimeZoneAdjustedToday, chequeDate) {
                 todayCheques.push(cheque);
             } else if datesEqual(threeDaysLater, chequeDate) {
                 futureCheques.push(cheque);
@@ -144,6 +149,7 @@ function formatMessage(string sheetType, ChequeData[] cheques, string dueTime) r
 
 
 function sendWhatsAppMessage(string messageBody) returns error? {
+    log:printInfo("Sending WhatsApp message: " + messageBody);
     _ = check twilioClient->createMessage({
         To: string `whatsapp:${twilioToNumber}`,
         From: string `whatsapp:${twilioFromNumber}`,
